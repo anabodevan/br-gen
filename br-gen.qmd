@@ -1,0 +1,226 @@
+---
+title: "Brazilian Generation"
+author: "Ana Bodevan"
+inspiration: "Beatriz Milz"
+format: html
+editor: visual
+---
+
+Long-term-wise, Brazil is following the trend of many middle- and high-income countries, with a **population aging rapidly** as **life expectancy rises** and **fertility rates decline**. However, the **current** demographic landscape tells a very different story: Brazil presents the **largest generation of teens and young adults** of its history. Today, I want to explore this trend following the incredible tutorial by [Beatriz Milz](https://beamilz.com/posts/2024-04-21-piramide-ggplot2/pt/).
+
+#### Defining "Generation"
+
+The cut-offs for each generation cohort are defined by [Beresford Research](https://www.beresfordresearch.com/age-range-by-generation/):
+
+![](images/Captura%20de%20tela%202024-11-19%20222651.png){fig-align="center"}
+
+### Loading Packages and Aesthetics
+
+```{r}
+
+library(pacman)
+pacman :: p_load(ggplot2, tidyverse, sysfonts, showtext, readxl, janitor)
+```
+
+```{r}
+
+font_add_google("Raleway", "Raleway")
+showtext_auto()
+
+background <- "#fefae0"
+h <- "#2a9d8f"
+m <- "#f4a261"
+
+theme <- theme_minimal(base_size = 14, base_family = "Raleway") +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank(),
+    plot.title = element_text(size = 16, family = "Raleway", face = "bold"),
+    plot.subtitle = element_text(size = 14, family = "Raleway"),
+    panel.background = element_rect(fill = background),
+    plot.background = element_rect(fill = background),
+    plot.margin = unit(c(20, 20, 20, 20), "pt"),
+    legend.position = "top",
+    legend.direction = "horizontal"
+    )
+
+```
+
+### Getting and Cleaning the Data
+
+Brazilian National Geography and Statistics Institute (IBGE) 2022 population data can be found [here](https://censo2022.ibge.gov.br/panorama/).
+
+```{r}
+
+pop <- read_excel("Downloads/Tabelas_panorama/Censo 2022 - Pirâmide etária - Brasil.xlsx")
+```
+
+Now, we use the `glimpse()` function to understand the structure of the data frame. Then, we run the `janitor` package to make sure it follows the same pattern.
+
+```{r}
+
+glimpse(pop)
+pop_clean <- janitor::clean_names(pop)
+```
+
+### Plotting the Plot
+
+With the data ready, we can begin to plan how we want our graph to look like. We will be using `ggplot` which requires:
+
+-   Variables X and Y
+
+    -   On our case, x is population, y is age group, and our fill is sex
+
+-   Aesthetics
+
+    -   We jump started it at the beginning
+
+-   Geometry
+
+    -   We will be making a population pyramid, so we will be using `geom_col()`
+
+### Pivoting our Base
+
+Inspecting our database, we see that the information of sex we need is stored as the name of two distinct columns. The solution is to pivot the table, which basically means we will get the information of both columns, "`populacao_feminina_pessoas`" and "`populacao_masculina_pessoas`" and transform into the variable "sex".
+
+To do so, we will use the `dplyr` package, loaded with `tidyverse`
+
+```{r}
+
+pivot_pop <- pop_clean %>% 
+  tidyr::pivot_longer(cols = c(
+    "populacao_feminina_pessoas",
+    "populacao_masculina_pessoas"
+  )) |>
+  dplyr::rename(populacao = value, sexo = name)
+
+glimpse(pivot_pop)
+```
+
+### Base Plot and Wrangling
+
+We need to do a bit more tweaking in order to build a **population pyramid**:
+
+-   Firstly, the value of one of the sexes has to be multiplied by -1. That will assure the data will spread the way we want
+
+```{r}
+pivot_pop_1 <- pivot_pop %>% 
+  dplyr::mutate(
+    pop = dplyr::case_when(
+      sexo == "populacao_masculina_pessoas" ~ populacao * -1,
+      sexo == "populacao_feminina_pessoas" ~ populacao
+    )
+  )
+```
+
+If we plot the above table:
+
+```{r}
+ggplot(pivot_pop_1) + 
+  aes(y = grupo_de_idade, x = pop, fill = sexo) +
+  geom_col()  
+```
+
+So... not so great. Let's try to pump it up a bit
+
+```{r}
+
+pivot_pop_2 <- pivot_pop_1 %>% 
+  # mutate "age" to a factor
+  dplyr::mutate(
+    age = factor(
+      grupo_de_idade,
+      levels = c(
+        "0 a 4 anos",
+        "5 a 9 anos",
+        "10 a 14 anos",
+        "15 a 19 anos",
+        "20 a 24 anos",
+        "25 a 29 anos",
+        "30 a 34 anos",
+        "35 a 39 anos",
+        "40 a 44 anos",
+        "45 a 49 anos",
+        "50 a 54 anos",
+        "55 a 59 anos",
+        "60 a 64 anos",
+        "65 a 69 anos",
+        "70 a 74 anos",
+        "75 a 79 anos",
+        "80 a 84 anos",
+        "85 a 89 anos",
+        "90 a 94 anos",
+        "95 a 99 anos",
+        "100 anos ou mais"
+      )
+    ),
+    # change the y axis variables
+    sex = dplyr::case_when(
+      sexo == "populacao_masculina_pessoas" ~ "Male",
+      sexo == "populacao_feminina_pessoas" ~ "Female",
+     ),
+    sex = factor(sex, levels = c("Male", "Female")),
+    # rename the data in "age" for readability 
+    age = fct_recode(age,
+      "100+" = "100 anos ou mais",
+      "95-99" = "95 a 99 anos",
+      "90-94" = "90 a 94 anos",
+      "85-89" = "85 a 89 anos",
+      "80-84" = "80 a 84 anos",
+      "75-79" = "75 a 79 anos",
+      "70-74" = "70 a 74 anos",
+      "65-69" = "65 a 69 anos",
+      "60-64" = "60 a 64 anos",
+      "55-59" = "55 a 59 anos",
+      "50-54" = "50 a 54 anos",
+      "45-49" = "45 a 49 anos",
+      "40-44" = "40 a 44 anos",
+      "35-39" = "35 a 39 anos",
+      "30-34" = "30 a 34 anos",
+      "25-29" = "25 a 29 anos",
+      "20-24" = "20 a 24 anos",
+      "15-19" = "15 a 19 anos",
+      "10-14" = "10 a 14 anos",
+      "5-9" = "5 a 9 anos",
+      "0-4" = "0 a 4 anos"
+    ),
+    # change population from a scientific notation to millions 
+    pop_m = pop/1000000
+  )
+  
+```
+
+Let's take a look:
+
+```{r}
+ggplot(pivot_pop_2) +
+  aes(y = age, x = pop_m, fill = sex) +
+  geom_col()
+```
+
+Looks way better!
+
+### Final Plot
+
+```{r}
+
+ggplot(pivot_pop_2) +
+  aes(x=pop_m, y=age, fill=sex) +
+  geom_col()+
+  scale_fill_manual(values = c(h, m)) +
+  scale_x_continuous(labels = abs) +
+  labs(
+    x = "Population (in millions)", 
+    y = "Age",
+    fill = "Sex",
+    title = "Brazil is Young, Actually",
+    subtitle = "Age pyramid in 2022",
+    caption = "Source: IBGE. Author: Ana Bodevan. Inspiration: Beatriz Milz."
+  ) +
+  coord_fixed(ratio = 0.65) +
+  theme 
+```
+
+The final result:
+
+![](br_gen.png){fig-align="center" width="486"}
